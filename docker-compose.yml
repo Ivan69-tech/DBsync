@@ -1,0 +1,15 @@
+services:
+  synchronizer:
+    build:
+      context: ./synchronizer
+      dockerfile: Dockerfile
+    container_name: synchronizer
+    restart: always
+    volumes:
+      - ./synchronizer/config.yaml:/app/config.yaml:ro
+      - ./synchronizer/data:/app/data
+      - /path/to/your/sqlite/dbs:/app/data/sqlite:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+
+
