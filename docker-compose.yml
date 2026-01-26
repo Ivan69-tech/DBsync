@@ -1,15 +1,17 @@
 services:
-  synchronizer:
+  db-sync:
     build:
-      context: ./synchronizer
+      context: .
       dockerfile: Dockerfile
-    container_name: synchronizer
+    container_name: DBsync
     restart: always
     volumes:
-      - ./synchronizer/config.yaml:/app/config.yaml:ro
-      - ./synchronizer/data:/app/data
-      - /path/to/your/sqlite/dbs:/app/data/sqlite:ro
+      - ../config.yaml:/app/config.yaml:ro
+      - ../.env:/app/.env:ro
+      - ../timestamp:/app/timestamp
+      - ~/Bureau/perso/ppc/db:/app/data/sqlite:ro
     environment:
       - PYTHONUNBUFFERED=1
+    command: ["python", "main.py"]
 
 

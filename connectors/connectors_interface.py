@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any
+import sqlite3
 from psycopg2.extensions import connection
 from datetime import datetime
 
@@ -29,7 +29,16 @@ class ConnectorInterface(ABC):
         pass
 
     @abstractmethod
-    def get_rows_from_sqlite(
+    def pull(
         self, db_dir: str, table_name: str, last_timestamp: datetime
-    ) -> list[tuple[Any, ...]]:
+    ) -> list[sqlite3.Row]:
+        pass
+
+    @abstractmethod
+    def push(
+        self,
+        conn: connection,
+        table_name: str,
+        rows: list[sqlite3.Row],
+    ) -> int:
         pass

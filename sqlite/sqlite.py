@@ -1,8 +1,8 @@
 import os
 from datetime import datetime, date, timedelta
-from config.config import SqliteConfig
 from sqlite3 import Connection
 import sqlite3
+import glob
 
 
 def get_db_path_for_date(dt: datetime, db_dir: str) -> str:
@@ -70,20 +70,45 @@ def connect_sqlite(db_path: str) -> Connection:
     return conn
 
 
-def get_table_name(conn: Connection, sqlite_config: SqliteConfig) -> str | None:
+def get_table_name(conn: Connection) -> str | None:
     """
     Trouve le nom de la table à synchroniser dans la base SQLite.
+    Cherche d'abord une table contenant "pc-" dans son nom.
 
     Args:
         conn: Connexion SQLite
-        sqlite_config: Configuration SQLite
 
     Returns:
         str | None: Nom de la table ou None si aucune table trouvée
     """
     cursor = conn.cursor()
-    cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-    )
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1;")
     result = cursor.fetchone()
     return result[0] if result else None
+
+
+def get_table_name_from_db_dir(db_dir: str) -> str | None:
+    """
+    Récupère le nom de la table SQLite depuis le premier fichier .db trouvé dans db_dir.
+
+    Args:
+        db_dir: Répertoire contenant les fichiers SQLite
+
+    Returns:
+        str | None: Nom de la table ou None si aucune table trouvée
+    """
+
+    db_dir = os.path.expanduser(db_dir)
+    db_files = glob.glob(os.path.join(db_dir, "*.db"))
+
+    if not db_files:
+        return None
+
+    # Utiliser le premier fichier trouvé
+    first_db = db_files[0]
+    try:
+        with connect_sqlite(first_db) as conn:
+            table_name = get_table_name(conn)
+            return table_name
+    except Exception:
+        return None

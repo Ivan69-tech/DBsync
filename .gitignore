@@ -1,2 +1,3 @@
 venv/
 .envgit
+__pycache__/

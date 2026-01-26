@@ -4,7 +4,9 @@ Utilise Pydantic pour la validation et le chargement automatique.
 Charge les secrets depuis un fichier .env.
 """
 
+import logging
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -17,129 +19,124 @@ env_path = Path(__file__).parent.parent / ".env"
 if env_path.exists():
     load_dotenv(env_path)
 
-
-class SqliteConfig(BaseModel):
-    """Configuration SQLite source."""
-
-    db_dir: str = Field(
-        default="./data/sqlite", description="Répertoire des fichiers SQLite"
-    )
-
-
-class PostgresRemoteConfig(BaseModel):
-    """Configuration du serveur PostgreSQL distant."""
-
-    host: str = Field(default="localhost", description="Hôte PostgreSQL")
-    port: int = Field(default=5432, description="Port PostgreSQL")
-    database: str = Field(default="", description="Nom de la base de données")
-    user: str = Field(default="", description="Utilisateur PostgreSQL")
-    password: str = Field(default="", description="Mot de passe PostgreSQL")
-
-    @classmethod
-    def from_env(cls) -> "PostgresRemoteConfig":
-        """
-        Crée une configuration PostgreSQL depuis les variables d'environnement.
-
-        Returns:
-            PostgresRemoteConfig: Configuration chargée depuis .env
-        """
-        return cls(
-            host=os.getenv("POSTGRES_HOST", "localhost"),
-            port=int(os.getenv("POSTGRES_PORT", "5432")),
-            database=os.getenv("POSTGRES_DATABASE", ""),
-            user=os.getenv("POSTGRES_USER", ""),
-            password=os.getenv("POSTGRES_PASSWORD", ""),
-        )
-
-
-class PostgresqlConfig(BaseModel):
-    """Configuration PostgreSQL complète."""
-
-    remote: PostgresRemoteConfig = Field(default_factory=PostgresRemoteConfig)
-    table_name: str = Field(
-        default="synced_data", description="Nom de la table de destination"
-    )
-
-
-class SyncConfig(BaseModel):
-    """Configuration de synchronisation."""
-
-    interval: int = Field(
-        default=15, description="Intervalle entre les cycles de sync (secondes)"
-    )
-    initial_retry_delay: int = Field(
-        default=1, description="Délai initial de retry (secondes)"
-    )
-    max_retry_delay: int = Field(
-        default=60, description="Délai maximum de retry (secondes)"
-    )
-    connect_timeout: int = Field(
-        default=10, description="Timeout de connexion (secondes)"
-    )
-
-
-class PathsConfig(BaseModel):
-    """Configuration des chemins de fichiers."""
-
-    timestamp_file: str = Field(
-        default="./data/lastSuccessFullTime.json",
-        description="Fichier de timestamp pour le suivi de la dernière sync",
-    )
+logger = logging.getLogger(__name__)
 
 
 class Config(BaseModel):
     """Configuration principale du synchroniseur."""
 
-    sqlite: SqliteConfig = Field(default_factory=SqliteConfig)
-    postgresql: PostgresqlConfig = Field(default_factory=PostgresqlConfig)
-    sync: SyncConfig = Field(default_factory=SyncConfig)
-    paths: PathsConfig = Field(default_factory=PathsConfig)
+    # Configuration SQLite
+    sqlite_db_dir: str = Field(description="Répertoire des fichiers SQLite")
+
+    # Configuration PostgreSQL (depuis .env)
+    postgres_host: str = Field(description="Hôte PostgreSQL")
+    postgres_port: int = Field(description="Port PostgreSQL")
+    postgres_database: str = Field(description="Nom de la base de données")
+    postgres_user: str = Field(description="Utilisateur PostgreSQL")
+    postgres_password: str = Field(description="Mot de passe PostgreSQL")
+
+    # Configuration synchronisation
+    sync_interval_seconds: int = Field(
+        default=15, description="Intervalle entre les cycles de sync (secondes)"
+    )
+
+    # Configuration chemins
+    timestamp_file_path: str = Field(
+        description="Fichier de timestamp pour le suivi de la dernière sync",
+    )
+
+    @classmethod
+    def load_from_yaml_and_env(cls, config_path: Path | None = None) -> "Config":
+        """
+        Charge la configuration depuis le fichier YAML et .env.
+
+        Args:
+            config_path: Chemin vers le fichier de configuration YAML (optionnel)
+
+        Returns:
+            Config: Configuration complète du synchroniseur
+
+        Raises:
+            SystemExit: Si un champ requis est manquant ou invalide
+        """
+        # Charger depuis YAML si le fichier existe
+        raw_config: dict[str, Any] = {}
+
+        if config_path is None:
+            config_path = Path(__file__).parent.parent / "config.yaml"
+
+        if config_path.exists():
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    raw_config = yaml.safe_load(f) or {}
+            except Exception as e:
+                logger.error(f"Erreur lors du chargement du fichier YAML: {e}")
+                sys.exit(1)
+
+        # Charger la configuration PostgreSQL depuis .env
+        postgres_host = os.getenv("POSTGRES_HOST")
+        postgres_port = os.getenv("POSTGRES_PORT")
+        postgres_database = os.getenv("POSTGRES_DATABASE")
+        postgres_user = os.getenv("POSTGRES_USER")
+        postgres_password = os.getenv("POSTGRES_PASSWORD")
+
+        # Vérifier que toutes les variables PostgreSQL sont présentes
+        if not postgres_host:
+            logger.error("ERREUR: POSTGRES_HOST doit être défini dans le fichier .env")
+            sys.exit(1)
+        if not postgres_port:
+            logger.error("ERREUR: POSTGRES_PORT doit être défini dans le fichier .env")
+            sys.exit(1)
+        if not postgres_database:
+            logger.error(
+                "ERREUR: POSTGRES_DATABASE doit être défini dans le fichier .env"
+            )
+            sys.exit(1)
+        if not postgres_user:
+            logger.error("ERREUR: POSTGRES_USER doit être défini dans le fichier .env")
+            sys.exit(1)
+        if not postgres_password:
+            logger.error(
+                "ERREUR: POSTGRES_PASSWORD doit être défini dans le fichier .env"
+            )
+            sys.exit(1)
+
+        # Vérifier que sqlite_db_dir est présent
+        sqlite_db_dir = raw_config.get("sqlite_db_dir")
+        if not sqlite_db_dir:
+            print(
+                "ERREUR: sqlite_db_dir doit être défini dans config.yaml",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        # Construire la configuration complète
+        try:
+            return cls(
+                sqlite_db_dir=str(sqlite_db_dir),
+                postgres_host=str(postgres_host),
+                postgres_port=int(postgres_port),
+                postgres_database=str(postgres_database),
+                postgres_user=str(postgres_user),
+                postgres_password=str(postgres_password),
+                sync_interval_seconds=raw_config.get("sync_interval_seconds", 15),
+                timestamp_file_path=raw_config.get(
+                    "timestamp_file_path", "synchronizer/data/lastSuccessFullTime.json"
+                ),
+            )
+        except Exception as e:
+            logger.error(f"ERREUR lors de la validation de la configuration: {e}")
+            sys.exit(1)
 
 
 def load_config(config_path: Path | None = None) -> Config:
     """
-    Charge la configuration depuis le fichier YAML (optionnel) et .env.
-
-    La configuration PostgreSQL est chargée UNIQUEMENT depuis .env.
-    Les autres paramètres (SQLite, sync, paths) peuvent venir du YAML ou utiliser les valeurs par défaut.
+    Charge la configuration depuis le fichier YAML et .env.
 
     Args:
         config_path: Chemin vers le fichier de configuration YAML (optionnel)
 
     Returns:
         Config: Configuration complète du synchroniseur
-
-    Raises:
-        yaml.YAMLError: Si le fichier YAML est invalide
-        pydantic.ValidationError: Si la configuration est invalide
-        ValueError: Si les variables PostgreSQL requises ne sont pas définies dans .env
     """
-    # Initialiser avec les valeurs par défaut
-    raw_config: dict[str, Any] = {}
-
-    # Charger depuis YAML si le fichier existe
-    if config_path is None:
-        config_path = Path(__file__).parent / "config.yaml"
-
-    if config_path.exists():
-        with open(config_path, "r", encoding="utf-8") as f:
-            raw_config = yaml.safe_load(f) or {}
-
-    # La configuration PostgreSQL vient UNIQUEMENT de .env
-    pg_remote_from_env = PostgresRemoteConfig.from_env()
-
-    # Vérifier que les valeurs requises sont présentes
-    if not pg_remote_from_env.database:
-        raise ValueError("POSTGRES_DATABASE doit être défini dans le fichier .env")
-    if not pg_remote_from_env.user:
-        raise ValueError("POSTGRES_USER doit être défini dans le fichier .env")
-    if not pg_remote_from_env.password:
-        raise ValueError("POSTGRES_PASSWORD doit être défini dans le fichier .env")
-
-    # Forcer la configuration PostgreSQL depuis .env
-    raw_config["postgresql"] = {
-        "remote": pg_remote_from_env.model_dump(),
-        "table_name": raw_config.get("postgresql", {}).get("table_name", "synced_data"),
-    }
-
-    return Config(**raw_config)
+    return Config.load_from_yaml_and_env(config_path)
