@@ -97,3 +97,11 @@ DBsync/
 ## Licence
 
 Projet personnel
+
+## Bug fix
+
+1. logs des doublons qui n'a pas l'air bon
+2. gestion d'erreur si pas de fichier timestamp (quitter le logiciel)
+3. perte de connexion avec la base
+4. vérifier la bonne connexion même si pas de données à envoyer.
+5. Si table supprimée pendant que c'est en cours --> probleme.

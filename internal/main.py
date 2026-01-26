@@ -37,9 +37,7 @@ logger = logging.getLogger(__name__)
 def main():
     """Fonction principale du synchroniseur."""
     # Parser les arguments de ligne de commande
-    parser = argparse.ArgumentParser(
-        description="Synchroniseur SQLite -> PostgreSQL"
-    )
+    parser = argparse.ArgumentParser(description="Synchroniseur SQLite -> PostgreSQL")
     parser.add_argument(
         "--config_path",
         type=str,
@@ -65,11 +63,13 @@ def main():
         config.postgres_port,
     )
 
-    table_name = get_table_name_from_db_dir(config.sqlite_db_dir)
-    if not table_name:
-        logger.error(f"Aucune table SQLite trouvée dans {config.sqlite_db_dir}")
-        sys.exit(1)
-    logger.info(f"Table SQLite détectée: {table_name}")
+    table_name = None
+    while table_name is None:
+        table_name = get_table_name_from_db_dir(config.sqlite_db_dir)
+        if not table_name:
+            logger.error(f"Aucune table SQLite trouvée dans {config.sqlite_db_dir}")
+            time.sleep(config.sync_interval_seconds)
+        logger.info(f"Table SQLite détectée: {table_name}")
 
     # Boucle principale de synchronisation
     # Note: La table sera créée automatiquement lors de la première synchronisation

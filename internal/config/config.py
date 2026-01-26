@@ -40,6 +40,9 @@ class Config(BaseModel):
         default=15, description="Intervalle entre les cycles de sync (secondes)"
     )
 
+    # env file
+    env_file_path: str = Field(description="Fichier .env")
+
     # Configuration chemins
     timestamp_file_path: str = Field(
         description="Fichier de timestamp pour le suivi de la dernière sync",
@@ -63,7 +66,11 @@ class Config(BaseModel):
         raw_config: dict[str, Any] = {}
 
         if config_path is None:
-            config_path = Path(__file__).parent.parent / "config.yaml"
+            print(
+                "ERREUR: config_path doit être défini",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
         if config_path.exists():
             try:
@@ -72,6 +79,30 @@ class Config(BaseModel):
             except Exception as e:
                 logger.error(f"Erreur lors du chargement du fichier YAML: {e}")
                 sys.exit(1)
+
+        sqlite_db_dir = raw_config.get("sqlite_db_dir")
+        if not sqlite_db_dir:
+            print(
+                "ERREUR: sqlite_db_dir doit être défini dans config.yaml",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        env_file_path = raw_config.get("env_file_path")
+        if not env_file_path:
+            print(
+                "ERREUR: env_file_path doit être défini dans config.yaml",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        env_path = Path(env_file_path).expanduser().resolve()
+        if not env_path.exists():
+            logger.error(
+                f"ERREUR: Le fichier .env n'existe pas au chemin spécifié : {env_path}"
+            )
+            sys.exit(1)
+        load_dotenv(dotenv_path=env_path)
 
         # Charger la configuration PostgreSQL depuis .env
         postgres_host = os.getenv("POSTGRES_HOST")
@@ -101,19 +132,11 @@ class Config(BaseModel):
             )
             sys.exit(1)
 
-        # Vérifier que sqlite_db_dir est présent
-        sqlite_db_dir = raw_config.get("sqlite_db_dir")
-        if not sqlite_db_dir:
-            print(
-                "ERREUR: sqlite_db_dir doit être défini dans config.yaml",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
         # Construire la configuration complète
         try:
             return cls(
                 sqlite_db_dir=str(sqlite_db_dir),
+                env_file_path=str(env_file_path),
                 postgres_host=str(postgres_host),
                 postgres_port=int(postgres_port),
                 postgres_database=str(postgres_database),

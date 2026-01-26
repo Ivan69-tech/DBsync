@@ -1,17 +1,16 @@
 services:
-  db-sync:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: DBsync
-    restart: always
+  dbsync:
+    image: dbsync:latest
+    container_name: dbsync
+    
     volumes:
-      - ../config.yaml:/app/config.yaml:ro
-      - ../.env:/app/.env:ro
-      - ../timestamp:/app/timestamp
-      - ~/Bureau/perso/ppc/db:/app/data/sqlite:ro
+      - ./config.yaml:/etc/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - ./timestamp:/etc/timestamp
+      - ~/Bureau/perso/ppc/db:/etc/data/sqlite:ro
     environment:
       - PYTHONUNBUFFERED=1
-    command: ["python", "main.py"]
+    command: ["python", "main.py", "--config_path", "/etc/config.yaml"]
+    network_mode: host
 
 
