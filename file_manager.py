@@ -3,11 +3,13 @@ Gestion du fichier de timestamp de synchronisation.
 """
 
 import json
+import logging
 import os
-import sys
 from datetime import datetime
 
-from config import PathsConfig
+from config.config import PathsConfig
+
+logger = logging.getLogger(__name__)
 
 
 def load_last_timestamp(paths_config: PathsConfig) -> datetime:
@@ -23,36 +25,18 @@ def load_last_timestamp(paths_config: PathsConfig) -> datetime:
     timestamp_file = paths_config.timestamp_file
 
     if not os.path.exists(timestamp_file):
-        print(
-            f"❌ Fichier timestamp introuvable : {timestamp_file}",
-            file=sys.stderr,
-        )
-        print(
-            'Créez-le avec le format: {"lastSuccessFullTime": "YYYY-MM-DD HH:MM:SS"}',
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        logger.error(f"Le fichier {timestamp_file} n'existe pas", exc_info=True)
 
     try:
         with open(timestamp_file, "r") as f:
             data = json.load(f)
-            print(f"🔍 Données chargées: {data}")
             timestamp_str = data["lastSuccessFullTime"]
-            # Essayer d'abord avec microsecondes, puis sans
-            try:
-                return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S.%f")
-            except ValueError:
-                return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            logger.info(f"Timestamp lu: {timestamp_str}")
+            return datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S.%f")
+
     except (json.JSONDecodeError, KeyError, ValueError) as e:
-        print(
-            f"❌ Erreur lors du chargement du timestamp : {e}",
-            file=sys.stderr,
-        )
-        print(
-            f"Le fichier {timestamp_file} est corrompu ou invalide.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        logger.error(f"Erreur lors du chargement du timestamp : {e}", exc_info=True)
+        return datetime.now()
 
 
 def save_timestamp(timestamp: datetime, paths_config: PathsConfig) -> None:

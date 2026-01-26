@@ -7,9 +7,10 @@ import sys
 import time
 
 import psycopg2
+from psycopg2.extensions import connection
 
-from config import load_config
-from database import close_connection, connect_postgres
+from config.config import load_config
+from connectors.connectors_factory import connector_factory
 from synchronizer import synchronize_data
 
 # Configuration du logging
@@ -40,56 +41,47 @@ def main():
     # Configuration PostgreSQL
     pg_config = config.postgresql.remote
     sync_config = config.sync
+    connector = connector_factory("ppc")
 
     # Connexion initiale à PostgreSQL
-    conn_remote = connect_postgres(
+    conn_remote: connection = connector.connect(
         pg_config.database,
         pg_config.user,
         pg_config.password,
         pg_config.host,
         pg_config.port,
-        sync_config,
     )
 
     # Boucle principale de synchronisation
     # Note: La table sera créée automatiquement lors de la première synchronisation
-    retry_delay = sync_config.initial_retry_delay
+    retry_delay = 10
     while True:
         try:
-            success = synchronize_data(conn_remote, config)
-            if success:
-                retry_delay = sync_config.initial_retry_delay
+            synchronize_data(conn_remote, config, connector)
             time.sleep(sync_config.interval)
 
         except psycopg2.OperationalError as e:
             logger.warning(
                 f"Perte de connexion PostgreSQL: {e}. Tentative de reconnexion..."
             )
-            close_connection(conn_remote)
+            connector.disconnect(conn_remote)
 
-            # Reconnexion avec backoff exponentiel
-            conn_remote = connect_postgres(
+            # Reconnexion
+            conn_remote = connector.connect(
                 pg_config.database,
                 pg_config.user,
                 pg_config.password,
                 pg_config.host,
                 pg_config.port,
-                sync_config,
-                retry_delay,
             )
-
-            # Réinitialiser le délai après reconnexion réussie
-            retry_delay = sync_config.initial_retry_delay
 
         except KeyboardInterrupt:
             logger.info("Arrêt demandé par l'utilisateur")
-            close_connection(conn_remote)
+            connector.disconnect(conn_remote)
             break
 
         except Exception as e:
             logger.error(f"Erreur inattendue: {e}", exc_info=True)
-            # Augmenter le délai avant la prochaine tentative
-            retry_delay = min(retry_delay * 2, sync_config.max_retry_delay)
             time.sleep(retry_delay)
 
 

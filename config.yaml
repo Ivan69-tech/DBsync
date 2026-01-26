@@ -1,6 +1,6 @@
 sqlite:
   db_dir: "~/Bureau/perso/ppc/db"
-  table_name: null
+
 
 
 postgresql:
