@@ -1,4 +1,4 @@
-sqlite_db_dir: "/etc/data/sqlite"
+sqlite_db_dir: "/data/sqlite"
 sync_interval_seconds: 15
-timestamp_file_path: "/etc/timestamp/last_successful_time.json"
+timestamp_file_path: "/data/timestamp/last_successful_time.json"
 env_file_path: "/app/.env"

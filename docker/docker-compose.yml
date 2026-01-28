@@ -1,0 +1,14 @@
+services:
+  dbsync:
+    image: dbsync:latest
+    container_name: dbsync
+    volumes:
+      - ./config_docker.yaml:/data/config.yaml:ro
+      - ./.env:/app/.env:ro
+      - ./timestamp:/data/timestamp
+      - ~/ppc/db:/data/sqlite:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: ["python", "main.py", "--config_path", "/data/config.yaml"]
+
+
