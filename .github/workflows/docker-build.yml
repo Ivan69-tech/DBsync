@@ -30,4 +30,4 @@ jobs:
           file: ./docker/Dockerfile
           platforms: linux/arm64
           push: ${{ github.ref == 'refs/heads/main' }}
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dbsync:latest
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dbsync-arm64:latest
