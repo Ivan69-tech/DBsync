@@ -6,7 +6,7 @@ services:
       - ../config_docker.yaml:/data/config.yaml:ro
       - ../.env:/app/.env:ro
       - ./timestamp:/data/timestamp
-      - ~/Bureau/perso/ppc/db:/data/sqlite:ro
+      - ~/Bureau/perso/psn/db:/data/sqlite:ro
     environment:
       - PYTHONUNBUFFERED=1
     command: ["python", "main.py", "--config_path", "/data/config.yaml"]

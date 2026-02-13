@@ -3,7 +3,7 @@ Logique principale de synchronisation SQLite -> PostgreSQL.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 import psycopg2
 from psycopg2.extensions import connection
@@ -60,23 +60,9 @@ def synchronize_data(
         if rows:
             # Trier par timestamp pour s'assurer d'avoir le plus récent
             sorted_rows = sorted(
-                rows,
-                key=lambda r: (
-                    r["timestamp"]
-                    if isinstance(r["timestamp"], (int, float))
-                    else r["timestamp"].timestamp()
-                    if isinstance(r["timestamp"], datetime)
-                    else datetime.fromisoformat(str(r["timestamp"])).timestamp()
-                ),
+                rows, key=lambda r: connector.get_row_timestamp(r).timestamp()
             )
-            timestamp_value = sorted_rows[-1]["timestamp"]
-            if isinstance(timestamp_value, datetime):
-                last_timestamp = timestamp_value
-            elif isinstance(timestamp_value, (int, float)):
-                last_timestamp = datetime.fromtimestamp(timestamp_value)
-            else:
-                last_timestamp = datetime.fromisoformat(str(timestamp_value))
-
+            last_timestamp = connector.get_row_timestamp(sorted_rows[-1])
             last_timestamp = last_timestamp + timedelta(microseconds=1)
 
             save_timestamp(last_timestamp, config.timestamp_file_path)

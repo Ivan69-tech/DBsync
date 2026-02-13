@@ -52,7 +52,8 @@ def main():
     config_path = Path(args.config_path) if args.config_path else None
     config = load_config(config_path)
 
-    connector = connector_factory("ppc")
+    # Créer le connector
+    connector = connector_factory(config.connector_type)
 
     # Connexion initiale à PostgreSQL
     conn_remote: connection = connector.connect(

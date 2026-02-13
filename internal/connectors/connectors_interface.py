@@ -42,3 +42,16 @@ class ConnectorInterface(ABC):
         rows: list[sqlite3.Row],
     ) -> int:
         pass
+
+    @abstractmethod
+    def get_row_timestamp(self, row: sqlite3.Row) -> datetime:
+        """
+        Extrait le timestamp d'une row pour la synchronisation.
+
+        Args:
+            row: Row SQLite
+
+        Returns:
+            datetime: Timestamp à utiliser pour le tracking de synchronisation
+        """
+        pass

@@ -69,7 +69,7 @@ docker-compose up -d
 
 Le projet suit une architecture modulaire :
 
-```
+```text
 DBsync/
 ├── config/          # Gestion de la configuration (Pydantic)
 ├── connectors/      # Connecteurs (pattern Factory)
@@ -87,6 +87,28 @@ DBsync/
 4. **Mise à jour** : Sauvegarde du nouveau timestamp
 
 ## Développement
+
+### Connecteurs disponibles
+
+#### PPC Connector
+
+Synchronise les données de performance avec la structure :
+
+- `key` (TEXT)
+- `timestamp` (DOUBLE PRECISION)
+- `type` (TEXT)
+- `value` (DOUBLE PRECISION)
+- PRIMARY KEY : `(key, timestamp)`
+
+#### PSN Connector
+
+Synchronise les données de prix avec la structure :
+
+- `start_date` (TEXT NOT NULL)
+- `end_date` (TEXT NOT NULL)
+- `price` (REAL NOT NULL)
+- `volume` (REAL NOT NULL)
+- PRIMARY KEY : `(start_date, end_date)`
 
 ### Ajouter un nouveau connecteur
 

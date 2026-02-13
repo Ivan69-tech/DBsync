@@ -1,4 +1,4 @@
-name: Build Docker ARM Image
+name: Build Docker Multi-Architecture Image
 
 on:
   push:
@@ -23,11 +23,11 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build and push Docker image (ARM64)
+      - name: Build and push Docker image (AMD64 & ARM64)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./docker/Dockerfile
-          platforms: linux/arm64
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.ref == 'refs/heads/main' }}
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dbsync-arm64:latest
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/dbsync:latest

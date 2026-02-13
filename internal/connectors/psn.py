@@ -1,5 +1,5 @@
 """
-Gestion des connexions et opérations PostgreSQL.
+Gestion des connexions et opérations PostgreSQL pour la table prices.
 """
 
 import logging
@@ -17,9 +17,9 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 
-class PPCConnector(ConnectorInterface):
+class PSNConnector(ConnectorInterface):
     """
-    Connexion PostgreSQL pour une base ppc.
+    Connexion PostgreSQL pour la base PSN (table prices).
     """
 
     def connect(
@@ -84,7 +84,7 @@ class PPCConnector(ConnectorInterface):
         table_name: str,
     ):
         """
-        Crée une table PostgreSQL avec les colonnes explicites : key, timestamp, type, value.
+        Crée une table PostgreSQL pour les prix avec les colonnes : start_date, end_date, price, volume.
 
         Args:
             conn: Connexion à la base de données
@@ -109,16 +109,16 @@ class PPCConnector(ConnectorInterface):
                 if not table_exists:
                     create_table_sql = f"""
                         CREATE TABLE "{table_name}" (
-                            key TEXT,
-                            timestamp DOUBLE PRECISION,
-                            type TEXT,
-                            value DOUBLE PRECISION,
-                            PRIMARY KEY (key, timestamp)
+                            start_date TEXT NOT NULL,
+                            end_date TEXT NOT NULL,
+                            price REAL NOT NULL,
+                            volume REAL NOT NULL,
+                            PRIMARY KEY (start_date, end_date)
                         )
                     """
                     cur.execute(create_table_sql)
                     logger.info(
-                        f"Table {table_name} créée avec les colonnes: key, timestamp, type, value"
+                        f"Table {table_name} créée avec les colonnes: start_date, end_date, price, volume"
                     )
                 else:
                     logger.debug(f"Table {table_name} existe déjà")
@@ -140,7 +140,7 @@ class PPCConnector(ConnectorInterface):
         last_timestamp: datetime,
     ) -> list[sqlite3.Row]:
         """
-        Récupère les lignes depuis SQLite avec timestamp > last_timestamp.
+        Récupère les lignes depuis SQLite avec start_date > last_timestamp.
 
         Args:
             db_dir: Répertoire des fichiers SQLite
@@ -154,14 +154,15 @@ class PPCConnector(ConnectorInterface):
         db_paths = get_db_paths_for_date_range(last_timestamp, datetime.now(), db_dir)
         rows_list: list[sqlite3.Row] = []
         try:
-            # Convertir le timestamp en secondes depuis l'epoch Unix
-            last_timestamp_seconds = last_timestamp.timestamp()
+            # Convertir le timestamp en format ISO pour comparaison avec start_date
+            last_timestamp_str = last_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
             for db_path in db_paths:
                 with connect_sqlite(str(db_path)) as conn:
                     cursor = conn.cursor()
                     cursor.execute(
-                        f'SELECT * FROM "{table_name}" WHERE timestamp > ? ORDER BY timestamp ASC',
-                        (last_timestamp_seconds,),
+                        f'SELECT * FROM "{table_name}" WHERE start_date > ? ORDER BY start_date ASC',
+                        (last_timestamp_str,),
                     )
                     rows = cursor.fetchall()
                     rows_list.extend(rows)
@@ -197,18 +198,18 @@ class PPCConnector(ConnectorInterface):
         inserted_count = 0
         try:
             # Convertir les sqlite3.Row en tuples pour execute_values
-            # Ordre: key, timestamp, type, value
+            # Ordre: start_date, end_date, price, volume
             rows_tuples = [
-                (row["key"], row["timestamp"], row["type"], row["value"])
+                (row["start_date"], row["end_date"], row["price"], row["volume"])
                 for row in rows
             ]
 
             with conn.cursor() as cur:
                 # Échapper le nom de la table avec des guillemets pour gérer les caractères spéciaux
                 insert_query = f"""
-                    INSERT INTO "{table_name}" (key, timestamp, type, value)
+                    INSERT INTO "{table_name}" (start_date, end_date, price, volume)
                     VALUES %s
-                    ON CONFLICT (key, timestamp) DO NOTHING
+                    ON CONFLICT (start_date, end_date) DO NOTHING
                 """
                 execute_values(
                     cur, insert_query, rows_tuples, template=None, page_size=1000
@@ -233,6 +234,7 @@ class PPCConnector(ConnectorInterface):
     def get_row_timestamp(self, row: sqlite3.Row) -> datetime:
         """
         Extrait le timestamp d'une row pour la synchronisation.
+        Pour PSN, on utilise start_date comme référence temporelle.
 
         Args:
             row: Row SQLite
@@ -240,10 +242,11 @@ class PPCConnector(ConnectorInterface):
         Returns:
             datetime: Timestamp à utiliser pour le tracking de synchronisation
         """
-        timestamp_value = row["timestamp"]
-        if isinstance(timestamp_value, datetime):
-            return timestamp_value
-        elif isinstance(timestamp_value, (int, float)):
-            return datetime.fromtimestamp(timestamp_value)
+        start_date_value = row["start_date"]
+        if isinstance(start_date_value, datetime):
+            return start_date_value
+        elif isinstance(start_date_value, (int, float)):
+            return datetime.fromtimestamp(start_date_value)
         else:
-            return datetime.fromisoformat(str(timestamp_value))
+            # Parse le format texte (ISO ou autre)
+            return datetime.fromisoformat(str(start_date_value))

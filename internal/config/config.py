@@ -40,6 +40,9 @@ class Config(BaseModel):
         default=15, description="Intervalle entre les cycles de sync (secondes)"
     )
 
+    # Configuration connector type
+    connector_type: str = Field(description="Type de connector (psn ou ppc)")
+
     # env file
     env_file_path: str = Field(description="Fichier .env")
 
@@ -84,6 +87,14 @@ class Config(BaseModel):
         if not sqlite_db_dir:
             print(
                 "ERREUR: sqlite_db_dir doit être défini dans config.yaml",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        connector_type = raw_config.get("connector_type")
+        if not connector_type:
+            print(
+                "ERREUR: connector_type doit être défini dans config.yaml (psn ou ppc)",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -142,6 +153,7 @@ class Config(BaseModel):
                 postgres_database=str(postgres_database),
                 postgres_user=str(postgres_user),
                 postgres_password=str(postgres_password),
+                connector_type=str(connector_type),
                 sync_interval_seconds=raw_config.get("sync_interval_seconds", 15),
                 timestamp_file_path=raw_config.get(
                     "timestamp_file_path", "synchronizer/data/lastSuccessFullTime.json"
