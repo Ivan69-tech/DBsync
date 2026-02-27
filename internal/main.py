@@ -77,16 +77,25 @@ def main():
     retry_delay = 10
     while True:
         try:
+            if conn_remote.closed:
+                logger.warning("Connexion PostgreSQL fermée. Reconnexion...")
+                conn_remote = connector.connect(
+                    config.postgres_database,
+                    config.postgres_user,
+                    config.postgres_password,
+                    config.postgres_host,
+                    config.postgres_port,
+                )
+
             synchronize_data(conn_remote, config, connector, table_name)
             time.sleep(config.sync_interval_seconds)
 
-        except psycopg2.OperationalError as e:
+        except psycopg2.Error as e:
             logger.warning(
-                f"Perte de connexion PostgreSQL: {e}. Tentative de reconnexion..."
+                f"Erreur PostgreSQL: {e}. Tentative de reconnexion..."
             )
             connector.disconnect(conn_remote)
 
-            # Reconnexion
             conn_remote = connector.connect(
                 config.postgres_database,
                 config.postgres_user,

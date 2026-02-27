@@ -130,7 +130,8 @@ class PSNConnector(ConnectorInterface):
                 f"Erreur lors de la création/modification de la table: {e}",
                 exc_info=True,
             )
-            conn.rollback()
+            if not conn.closed:
+                conn.rollback()
             raise
 
     def pull(
@@ -228,8 +229,9 @@ class PSNConnector(ConnectorInterface):
             logger.error(
                 f"Erreur lors de l'insertion dans PostgreSQL: {e}", exc_info=True
             )
-            conn.rollback()
-            raise  # Relancer l'exception pour que synchronizer.py puisse la gérer
+            if not conn.closed:
+                conn.rollback()
+            raise
 
     def get_row_timestamp(self, row: sqlite3.Row) -> datetime:
         """
