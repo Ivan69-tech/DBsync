@@ -12,3 +12,4 @@ services:
     command: ["python", "main.py", "--config_path", "/data/config.yaml"]
 
 
+
