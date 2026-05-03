@@ -13,8 +13,8 @@ from psycopg2.extensions import connection
 
 from config.config import load_config
 from connectors.connectors_factory import connector_factory
-from synchronizer.synchronizer import synchronize_data
 from sqlite.sqlite import get_table_name_from_db_dir
+from synchronizer.synchronizer import synchronize_data
 
 # Configuration du logging
 logging.basicConfig(
@@ -36,26 +36,30 @@ logger = logging.getLogger(__name__)
 
 def main():
     """Fonction principale du synchroniseur."""
-    # Parser les arguments de ligne de commande
     parser = argparse.ArgumentParser(description="Synchroniseur SQLite -> PostgreSQL")
     parser.add_argument(
         "--config_path",
         type=str,
         default=None,
-        help="Chemin vers le fichier de configuration YAML (par défaut: config.yaml à la racine)",
+        help="Chemin vers le fichier de configuration YAML",
     )
     args = parser.parse_args()
 
     logger.info("Démarrage du synchroniseur SQLite -> PostgreSQL")
 
-    # Charger la configuration
     config_path = Path(args.config_path) if args.config_path else None
     config = load_config(config_path)
 
-    # Créer le connector
-    connector = connector_factory(config.connector_type)
+    table_name = None
+    while table_name is None:
+        table_name = get_table_name_from_db_dir(config.sqlite_db_dir)
+        if not table_name:
+            logger.error(f"Aucune table SQLite trouvée dans {config.sqlite_db_dir}")
+            time.sleep(config.sync_interval_seconds)
+    logger.info(f"Table SQLite détectée (site_id): {table_name}")
 
-    # Connexion initiale à PostgreSQL
+    connector = connector_factory(config.connector_type, table_name)
+
     conn_remote: connection = connector.connect(
         config.postgres_database,
         config.postgres_user,
@@ -64,16 +68,6 @@ def main():
         config.postgres_port,
     )
 
-    table_name = None
-    while table_name is None:
-        table_name = get_table_name_from_db_dir(config.sqlite_db_dir)
-        if not table_name:
-            logger.error(f"Aucune table SQLite trouvée dans {config.sqlite_db_dir}")
-            time.sleep(config.sync_interval_seconds)
-        logger.info(f"Table SQLite détectée: {table_name}")
-
-    # Boucle principale de synchronisation
-    # Note: La table sera créée automatiquement lors de la première synchronisation
     retry_delay = 10
     while True:
         try:
@@ -91,11 +85,8 @@ def main():
             time.sleep(config.sync_interval_seconds)
 
         except psycopg2.Error as e:
-            logger.warning(
-                f"Erreur PostgreSQL: {e}. Tentative de reconnexion..."
-            )
+            logger.warning(f"Erreur PostgreSQL: {e}. Tentative de reconnexion...")
             connector.disconnect(conn_remote)
-
             conn_remote = connector.connect(
                 config.postgres_database,
                 config.postgres_user,
