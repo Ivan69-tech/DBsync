@@ -1,5 +1,14 @@
 sqlite_db_dir: "/etc/data/sqlite"
 sync_interval_seconds: 15
-timestamp_file_path: "/etc/timestamp/last_successful_time.json"
 env_file_path: ".env"
-connector_type: "ppc"
+
+connectors:
+  - type: "ppc"
+    timestamp_file_path: "/etc/timestamp/ppc_last_ts.json"
+  # - type: "forecaster"
+  #   timestamp_file_path: "/etc/timestamp/forecaster_last_ts.json"
+  #   key_mapping:
+  #     bess_0_p: puissance_bess_kw
+  #     pv_0_p: production_pv_kw
+  #     conso_kw: conso_kw
+  #     soc_kwh: soc_kwh

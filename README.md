@@ -90,25 +90,52 @@ DBsync/
 
 ### Connecteurs disponibles
 
-#### PPC Connector
+#### PPC Connector (`connector_type: "ppc"`)
 
-Synchronise les données de performance avec la structure :
+Synchronise les datapoints bruts du PPC vers la table `ppc_raw` (format key-value).
 
-- `key` (TEXT)
-- `timestamp` (DOUBLE PRECISION)
-- `type` (TEXT)
-- `value` (DOUBLE PRECISION)
-- PRIMARY KEY : `(key, timestamp)`
+| Colonne | Type |
+|---------|------|
+| `site_id` | TEXT |
+| `key` | TEXT |
+| `timestamp` | DOUBLE PRECISION |
+| `type` | TEXT |
+| `value` | TEXT |
+| PRIMARY KEY | `(site_id, key, timestamp)` |
 
-#### PSN Connector
+#### PSN Connector (`connector_type: "psn"`)
 
-Synchronise les données de prix avec la structure :
+Synchronise les données de prix vers la table `prices`.
 
-- `start_date` (TEXT NOT NULL)
-- `end_date` (TEXT NOT NULL)
-- `price` (REAL NOT NULL)
-- `volume` (REAL NOT NULL)
-- PRIMARY KEY : `(start_date, end_date)`
+| Colonne | Type |
+|---------|------|
+| `start_date` | TEXT NOT NULL |
+| `end_date` | TEXT NOT NULL |
+| `price` | REAL NOT NULL |
+| `volume` | REAL NOT NULL |
+| PRIMARY KEY | `(start_date, end_date)` |
+
+#### Mesures Connector (`connector_type: "mesures"`)
+
+Lit les datapoints bruts du PPC (table SQLite nommée d'après le site), pivote les clés selon un mapping YAML, et insère dans la table `mesures_reelles` du Forecaster.
+
+- Regroupe les rows par timestamp
+- N'insère que les timestamps pour lesquels **toutes** les clés du mapping sont présentes
+- `puissance_pdl_kw` est défaut à `0.0` si absent du mapping
+- Upsert sur `(site_id, timestamp)`
+
+Configuration dans `config.yaml` :
+
+```yaml
+connector_type: "mesures"
+forecaster_connector:
+  mesures:
+    key_mapping:
+      bess_0_p: puissance_bess_kw
+      pv_0_p: production_pv_kw
+      conso_kw: conso_kw
+      soc_kwh: soc_kwh
+```
 
 ### Ajouter un nouveau connecteur
 

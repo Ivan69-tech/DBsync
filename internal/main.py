@@ -11,8 +11,9 @@ from pathlib import Path
 import psycopg2
 from psycopg2.extensions import connection
 
-from config.config import load_config
+from config.config import Config, ConnectorConfig, load_config
 from connectors.connectors_factory import connector_factory
+from connectors.connectors_interface import ConnectorInterface
 from sqlite.sqlite import get_table_name_from_db_dir
 from synchronizer.synchronizer import synchronize_data
 
@@ -32,6 +33,16 @@ if hasattr(sys.stdout, "reconfigure"):
 sys.stdout.flush()
 
 logger = logging.getLogger(__name__)
+
+
+def _pg_connect(connector: ConnectorInterface, config: Config) -> connection:
+    return connector.connect(
+        config.postgres_database,
+        config.postgres_user,
+        config.postgres_password,
+        config.postgres_host,
+        config.postgres_port,
+    )
 
 
 def main():
@@ -58,46 +69,39 @@ def main():
             time.sleep(config.sync_interval_seconds)
     logger.info(f"Table SQLite détectée (site_id): {table_name}")
 
-    connector = connector_factory(config.connector_type, table_name)
-
-    conn_remote: connection = connector.connect(
-        config.postgres_database,
-        config.postgres_user,
-        config.postgres_password,
-        config.postgres_host,
-        config.postgres_port,
-    )
+    # Initialiser un connector + une connexion PG par entrée de config
+    # active[i] = (connector, conn_remote, timestamp_file_path)
+    active: list[tuple[ConnectorInterface, connection, str]] = []
+    for cc in config.connectors:
+        connector = connector_factory(cc.type, site_id=table_name, key_mapping=cc.key_mapping)
+        conn = _pg_connect(connector, config)
+        active.append((connector, conn, cc.timestamp_file_path))
+        logger.info(f"Connector '{cc.type}' initialisé (ts: {cc.timestamp_file_path})")
 
     retry_delay = 10
     while True:
         try:
-            if conn_remote.closed:
-                logger.warning("Connexion PostgreSQL fermée. Reconnexion...")
-                conn_remote = connector.connect(
-                    config.postgres_database,
-                    config.postgres_user,
-                    config.postgres_password,
-                    config.postgres_host,
-                    config.postgres_port,
-                )
+            for i, (connector, conn_remote, ts_path) in enumerate(active):
+                try:
+                    if conn_remote.closed:
+                        logger.warning(f"Connexion PostgreSQL fermée pour '{config.connectors[i].type}'. Reconnexion...")
+                        conn_remote = _pg_connect(connector, config)
+                        active[i] = (connector, conn_remote, ts_path)
 
-            synchronize_data(conn_remote, config, connector, table_name)
+                    synchronize_data(conn_remote, config, connector, table_name, ts_path)
+
+                except psycopg2.Error as e:
+                    logger.warning(f"Erreur PostgreSQL ({config.connectors[i].type}): {e}. Reconnexion...")
+                    connector.disconnect(conn_remote)
+                    conn_remote = _pg_connect(connector, config)
+                    active[i] = (connector, conn_remote, ts_path)
+
             time.sleep(config.sync_interval_seconds)
-
-        except psycopg2.Error as e:
-            logger.warning(f"Erreur PostgreSQL: {e}. Tentative de reconnexion...")
-            connector.disconnect(conn_remote)
-            conn_remote = connector.connect(
-                config.postgres_database,
-                config.postgres_user,
-                config.postgres_password,
-                config.postgres_host,
-                config.postgres_port,
-            )
 
         except KeyboardInterrupt:
             logger.info("Arrêt demandé par l'utilisateur")
-            connector.disconnect(conn_remote)
+            for connector, conn_remote, _ in active:
+                connector.disconnect(conn_remote)
             break
 
         except Exception as e:

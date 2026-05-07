@@ -22,6 +22,12 @@ if env_path.exists():
 logger = logging.getLogger(__name__)
 
 
+class ConnectorConfig(BaseModel):
+    type: str
+    timestamp_file_path: str
+    key_mapping: dict[str, str] | None = None
+
+
 class Config(BaseModel):
     """Configuration principale du synchroniseur."""
 
@@ -40,16 +46,11 @@ class Config(BaseModel):
         default=15, description="Intervalle entre les cycles de sync (secondes)"
     )
 
-    # Configuration connector type
-    connector_type: str = Field(description="Type de connector (psn ou ppc)")
-
     # env file
     env_file_path: str = Field(description="Fichier .env")
 
-    # Configuration chemins
-    timestamp_file_path: str = Field(
-        description="Fichier de timestamp pour le suivi de la dernière sync",
-    )
+    # Liste des connecteurs à exécuter
+    connectors: list[ConnectorConfig]
 
     @classmethod
     def load_from_yaml_and_env(cls, config_path: Path | None = None) -> "Config":
@@ -65,7 +66,6 @@ class Config(BaseModel):
         Raises:
             SystemExit: Si un champ requis est manquant ou invalide
         """
-        # Charger depuis YAML si le fichier existe
         raw_config: dict[str, Any] = {}
 
         if config_path is None:
@@ -91,10 +91,10 @@ class Config(BaseModel):
             )
             sys.exit(1)
 
-        connector_type = raw_config.get("connector_type")
-        if not connector_type:
+        connectors_raw = raw_config.get("connectors")
+        if not connectors_raw:
             print(
-                "ERREUR: connector_type doit être défini dans config.yaml (psn ou ppc)",
+                "ERREUR: connectors doit être défini dans config.yaml (liste de connecteurs)",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -143,6 +143,16 @@ class Config(BaseModel):
             )
             sys.exit(1)
 
+        # Parser la liste des connecteurs
+        connectors = [
+            ConnectorConfig(
+                type=str(cc["type"]),
+                timestamp_file_path=str(cc["timestamp_file_path"]),
+                key_mapping=cc.get("key_mapping"),
+            )
+            for cc in connectors_raw
+        ]
+
         # Construire la configuration complète
         try:
             return cls(
@@ -153,11 +163,8 @@ class Config(BaseModel):
                 postgres_database=str(postgres_database),
                 postgres_user=str(postgres_user),
                 postgres_password=str(postgres_password),
-                connector_type=str(connector_type),
                 sync_interval_seconds=raw_config.get("sync_interval_seconds", 15),
-                timestamp_file_path=raw_config.get(
-                    "timestamp_file_path", "synchronizer/data/lastSuccessFullTime.json"
-                ),
+                connectors=connectors,
             )
         except Exception as e:
             logger.error(f"ERREUR lors de la validation de la configuration: {e}")

@@ -20,6 +20,7 @@ def synchronize_data(
     config: Config,
     connector: ConnectorInterface,
     table_name: str,
+    timestamp_file_path: str,
 ) -> None:
     """
     Synchronise les données de SQLite vers PostgreSQL.
@@ -28,10 +29,12 @@ def synchronize_data(
         conn_remote: Connexion à la base PostgreSQL distante
         config: Configuration complète
         connector: Connecteur pour les opérations SQLite et PostgreSQL
+        table_name: Nom de la table SQLite source (site_id)
+        timestamp_file_path: Fichier de suivi du dernier timestamp synchronisé
     """
     try:
         # Charger le dernier timestamp
-        last_successful_time = load_last_timestamp(config.timestamp_file_path)
+        last_successful_time = load_last_timestamp(timestamp_file_path)
         logger.info(f"Tentative de synchronisation depuis {last_successful_time}")
 
         rows = connector.pull(
@@ -65,7 +68,7 @@ def synchronize_data(
             last_timestamp = connector.get_row_timestamp(sorted_rows[-1])
             last_timestamp = last_timestamp + timedelta(microseconds=1)
 
-            save_timestamp(last_timestamp, config.timestamp_file_path)
+            save_timestamp(last_timestamp, timestamp_file_path)
             logger.info(f"Timestamp mis à jour: {last_timestamp}")
 
     except psycopg2.Error as e:
