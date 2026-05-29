@@ -4,16 +4,17 @@ Synchroniseur de données SQLite → PostgreSQL avec suivi par timestamp pour é
 
 ## Description
 
-DBsync est un outil de synchronisation qui lit des données depuis des fichiers SQLite organisés par date (format `YYYY_MM_DD.db`) et les synchronise vers une base de données PostgreSQL. Le système utilise un mécanisme de timestamp pour ne synchroniser que les nouvelles données et éviter les doublons.
+DBsync est un outil de synchronisation qui lit des données depuis des fichiers SQLite organisés par date (format `YYYY_MM_DD.db`) et les synchronise vers une base de données PostgreSQL. Le système utilise un mécanisme de timestamp par connecteur pour ne synchroniser que les nouvelles données et éviter les doublons.
 
 ## Fonctionnalités
 
-- ✅ Synchronisation automatique SQLite → PostgreSQL
-- ✅ Gestion des timestamps pour éviter les doublons
-- ✅ Reconnexion automatique en cas de perte de connexion
-- ✅ Support de fichiers SQLite organisés par date
-- ✅ Architecture modulaire avec pattern Factory
-- ✅ Configuration via YAML et variables d'environnement
+- Synchronisation automatique SQLite → PostgreSQL
+- Gestion des timestamps pour éviter les doublons
+- Reconnexion automatique en cas de perte de connexion
+- Support de fichiers SQLite organisés par date
+- Architecture modulaire avec pattern Factory
+- Configuration via YAML et variables d'environnement
+- Multi-connecteurs : plusieurs synchronisations indépendantes en parallèle
 
 ## Installation
 
@@ -34,14 +35,25 @@ pip install -r requirements.txt
 ### 1. Fichier `config.yaml`
 
 ```yaml
-sqlite_db_dir: "~/Bureau/perso/ppc/db"
+sqlite_db_dir: "/etc/data/sqlite"
 sync_interval_seconds: 15
-timestamp_file_path: "./timestamp/last_successful_time.json"
+env_file_path: ".env"
+
+connectors:
+  - type: "ppc"
+    timestamp_file_path: "/etc/timestamp/ppc_last_ts.json"
+  # - type: "forecaster"
+  #   timestamp_file_path: "/etc/timestamp/forecaster_last_ts.json"
+  #   key_mapping:
+  #     bess_0_p: puissance_bess_kw
+  #     pv_0_p: production_pv_kw
+  #     conso_kw: conso_kw
+  #     soc_kwh: soc_kwh
 ```
 
 ### 2. Fichier `.env`
 
-Créez un fichier `.env` à la racine du projet :
+Créez un fichier `.env` (chemin défini par `env_file_path`) :
 
 ```env
 POSTGRES_HOST=localhost
@@ -56,27 +68,32 @@ POSTGRES_PASSWORD=admin
 ### Exécution directe
 
 ```bash
-python main.py
+python internal/main.py --config_path config.yaml
 ```
 
 ### Avec Docker
 
 ```bash
-docker-compose up -d
+docker-compose -f docker/docker-compose.yml up -d
 ```
+
+Le conteneur utilise `config_docker.yaml` par défaut.
 
 ## Architecture
 
-Le projet suit une architecture modulaire :
-
 ```text
 DBsync/
-├── config/          # Gestion de la configuration (Pydantic)
-├── connectors/      # Connecteurs (pattern Factory)
-├── sqlite/          # Utilitaires SQLite
-├── synchronizer/    # Logique de synchronisation
-├── volume/          # Gestion des timestamps
-└── main.py          # Point d'entrée
+├── internal/
+│   ├── config/          # Gestion de la configuration (Pydantic)
+│   ├── connectors/      # Connecteurs (pattern Factory)
+│   ├── sqlite/          # Utilitaires SQLite
+│   ├── synchronizer/    # Logique de synchronisation
+│   ├── tests/           # Tests unitaires
+│   ├── volume/          # Gestion des timestamps
+│   └── main.py          # Point d'entrée
+├── docker/              # Dockerfile et docker-compose
+├── config.yaml          # Configuration locale
+└── config_docker.yaml   # Configuration Docker
 ```
 
 ### Flux de synchronisation
@@ -86,11 +103,9 @@ DBsync/
 3. **Insertion** : Insertion en batch dans PostgreSQL avec gestion des doublons
 4. **Mise à jour** : Sauvegarde du nouveau timestamp
 
-## Développement
+## Connecteurs disponibles
 
-### Connecteurs disponibles
-
-#### PPC Connector (`connector_type: "ppc"`)
+### PPC Connector (`type: "ppc"`)
 
 Synchronise les datapoints bruts du PPC vers la table `ppc_raw` (format key-value).
 
@@ -103,7 +118,7 @@ Synchronise les datapoints bruts du PPC vers la table `ppc_raw` (format key-valu
 | `value` | TEXT |
 | PRIMARY KEY | `(site_id, key, timestamp)` |
 
-#### PSN Connector (`connector_type: "psn"`)
+### PSN Connector (`type: "psn"`)
 
 Synchronise les données de prix vers la table `prices`.
 
@@ -115,7 +130,7 @@ Synchronise les données de prix vers la table `prices`.
 | `volume` | REAL NOT NULL |
 | PRIMARY KEY | `(start_date, end_date)` |
 
-#### Mesures Connector (`connector_type: "mesures"`)
+### Forecaster Connector (`type: "forecaster"`)
 
 Lit les datapoints bruts du PPC (table SQLite nommée d'après le site), pivote les clés selon un mapping YAML, et insère dans la table `mesures_reelles` du Forecaster.
 
@@ -127,9 +142,9 @@ Lit les datapoints bruts du PPC (table SQLite nommée d'après le site), pivote 
 Configuration dans `config.yaml` :
 
 ```yaml
-connector_type: "mesures"
-forecaster_connector:
-  mesures:
+connectors:
+  - type: "forecaster"
+    timestamp_file_path: "/etc/timestamp/forecaster_last_ts.json"
     key_mapping:
       bess_0_p: puissance_bess_kw
       pv_0_p: production_pv_kw
@@ -137,20 +152,12 @@ forecaster_connector:
       soc_kwh: soc_kwh
 ```
 
-### Ajouter un nouveau connecteur
+## Ajouter un nouveau connecteur
 
-1. Implémenter `ConnectorInterface` dans `connectors/`
-2. Enregistrer dans `connectors_factory.py`
-3. Utiliser via `connector_factory("nom_connecteur")`
+1. Implémenter `ConnectorInterface` dans `internal/connectors/`
+2. Enregistrer dans `internal/connectors/connectors_factory.py`
+3. Ajouter l'entrée correspondante dans `config.yaml`
 
 ## Licence
 
 Projet personnel
-
-## Bug fix
-
-1. logs des doublons qui n'a pas l'air bon
-2. gestion d'erreur si pas de fichier timestamp (quitter le logiciel)
-3. perte de connexion avec la base
-4. vérifier la bonne connexion même si pas de données à envoyer.
-5. Si table supprimée pendant que c'est en cours --> probleme.
