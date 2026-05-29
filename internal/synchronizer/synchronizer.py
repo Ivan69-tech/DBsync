@@ -54,22 +54,20 @@ def synchronize_data(
         # Insérer les données
         inserted_count = connector.push(conn_remote, table_name, rows)
 
-        if inserted_count == 0 and len(rows) > 0:
-            logger.info(
-                f"Toutes les {len(rows)} lignes récupérées sont déjà en base (doublons). "
-                "Mise à jour du timestamp pour avancer."
-            )
-
-        if rows:
-            # Trier par timestamp pour s'assurer d'avoir le plus récent
+        if inserted_count > 0:
             sorted_rows = sorted(
                 rows, key=lambda r: connector.get_row_timestamp(r).timestamp()
             )
             last_timestamp = connector.get_row_timestamp(sorted_rows[-1])
             last_timestamp = last_timestamp + timedelta(microseconds=1)
-
             save_timestamp(last_timestamp, timestamp_file_path)
             logger.info(f"Timestamp mis à jour: {last_timestamp}")
+        elif rows:
+            logger.warning(
+                "%d lignes récupérées mais 0 insérées — timestamp non avancé. "
+                "Vérifier le key_mapping et les logs de filtrage.",
+                len(rows),
+            )
 
     except psycopg2.Error as e:
         logger.error(f"Erreur PostgreSQL: {e}", exc_info=True)

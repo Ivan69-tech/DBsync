@@ -26,6 +26,7 @@ class ConnectorConfig(BaseModel):
     type: str
     timestamp_file_path: str
     key_mapping: dict[str, str] | None = None
+    bucket_seconds: int = 1
 
 
 class Config(BaseModel):

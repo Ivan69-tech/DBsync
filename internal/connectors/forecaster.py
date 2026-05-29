@@ -22,9 +22,10 @@ _PDL_COL = "puissance_pdl_kw"
 
 
 class ForecasterConnector(ConnectorInterface):
-    def __init__(self, site_id: str, key_mapping: dict[str, str]):
+    def __init__(self, site_id: str, key_mapping: dict[str, str], bucket_seconds: int = 1):
         self.site_id = site_id
         self.key_mapping = key_mapping  # ex: {"bess_0_p": "puissance_bess_kw", ...}
+        self.bucket_seconds = bucket_seconds
 
     def connect(self, dbname, user, password, host, port):
         connect_timeout = 10
@@ -112,16 +113,17 @@ class ForecasterConnector(ConnectorInterface):
         if not rows:
             return 0
 
-        # Grouper par timestamp : {ts_float: {sqlite_key: value_str}}
+        # Grouper par bucket de bucket_seconds : {ts_bucket: {sqlite_key: value_str}}
         groups: dict[float, dict[str, str]] = {}
         for row in rows:
             key = row["key"]
             if key not in self.key_mapping:
                 continue
-            ts = float(row["timestamp"])
-            if ts not in groups:
-                groups[ts] = {}
-            groups[ts][key] = row["value"]
+            ts_raw = float(row["timestamp"])
+            ts_bucket = round(ts_raw / self.bucket_seconds) * self.bucket_seconds
+            if ts_bucket not in groups:
+                groups[ts_bucket] = {}
+            groups[ts_bucket][key] = row["value"]
 
         required_keys = set(self.key_mapping.keys())
         has_pdl = _PDL_COL in self.key_mapping.values()
@@ -136,7 +138,9 @@ class ForecasterConnector(ConnectorInterface):
         for ts in sorted(groups):
             key_values = groups[ts]
             if not required_keys.issubset(key_values.keys()):
-                continue  # timestamp incomplet, skip silencieux
+                missing = required_keys - key_values.keys()
+                logger.warning("Bucket ts=%s ignoré — clés manquantes: %s", ts, missing)
+                continue
             dt = datetime.fromtimestamp(ts, tz=timezone.utc)
             row_values: list = [self.site_id, dt]
             for src_key in self.key_mapping:
