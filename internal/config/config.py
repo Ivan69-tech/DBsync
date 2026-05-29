@@ -150,6 +150,7 @@ class Config(BaseModel):
                 type=str(cc["type"]),
                 timestamp_file_path=str(cc["timestamp_file_path"]),
                 key_mapping=cc.get("key_mapping"),
+                bucket_seconds=int(cc.get("bucket_seconds", 1)),
             )
             for cc in connectors_raw
         ]

@@ -73,7 +73,7 @@ def main():
     # active[i] = (connector, conn_remote, timestamp_file_path)
     active: list[tuple[ConnectorInterface, connection, str]] = []
     for cc in config.connectors:
-        connector = connector_factory(cc.type, site_id=table_name, key_mapping=cc.key_mapping)
+        connector = connector_factory(cc.type, site_id=table_name, key_mapping=cc.key_mapping, bucket_seconds=cc.bucket_seconds)
         conn = _pg_connect(connector, config)
         active.append((connector, conn, cc.timestamp_file_path))
         logger.info(f"Connector '{cc.type}' initialisé (ts: {cc.timestamp_file_path})")

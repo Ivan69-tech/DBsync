@@ -134,10 +134,11 @@ Synchronise les données de prix vers la table `prices`.
 
 Lit les datapoints bruts du PPC (table SQLite nommée d'après le site), pivote les clés selon un mapping YAML, et insère dans la table `mesures_reelles` du Forecaster.
 
-- Regroupe les rows par timestamp
-- N'insère que les timestamps pour lesquels **toutes** les clés du mapping sont présentes
+- Regroupe les rows par **bucket de `bucket_seconds` secondes** pour tolérer les légers décalages de timestamp entre keys
+- N'insère que les buckets pour lesquels **toutes** les clés du mapping sont présentes (log warning si manquantes)
 - `puissance_pdl_kw` est défaut à `0.0` si absent du mapping
 - Upsert sur `(site_id, timestamp)`
+- Le timestamp de synchronisation **n'avance que si des lignes ont été insérées** (évite la perte de données en cas de filtrage)
 
 Configuration dans `config.yaml` :
 
@@ -145,12 +146,19 @@ Configuration dans `config.yaml` :
 connectors:
   - type: "forecaster"
     timestamp_file_path: "/etc/timestamp/forecaster_last_ts.json"
+    bucket_seconds: 5   # regroupe les keys arrivant dans une fenêtre de 5s (défaut: 1)
     key_mapping:
-      bess_0_p: puissance_bess_kw
-      pv_0_p: production_pv_kw
+      bess_0_p_kW: puissance_bess_kw
+      pv_0_p_kW: production_pv_kw
       conso_kw: conso_kw
-      soc_kwh: soc_kwh
+      bess_0_soc_pc: soc_kwh
 ```
+
+> **Note** : si les données historiques ont été sautées (timestamp déjà avancé), réinitialiser le fichier timestamp avant de redémarrer :
+> ```bash
+> echo '{"last_successful_time": "2024-01-01T00:00:00+00:00"}' \
+>   > /data/timestamp/forecaster_last_successful_time.json
+> ```
 
 ## Ajouter un nouveau connecteur
 

@@ -7,6 +7,7 @@ connectors:
     timestamp_file_path: "/etc/timestamp/ppc_last_ts.json"
   - type: "forecaster"
     timestamp_file_path: "/etc/timestamp/forecaster_last_ts.json"
+    bucket_seconds: 5
     key_mapping:
       bess_0_p_kW: puissance_bess_kw
       pv_0_p_kw: production_pv_kw
