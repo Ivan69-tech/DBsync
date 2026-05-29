@@ -20,6 +20,12 @@ logger = logging.getLogger(__name__)
 _FORECASTER_TABLE = "mesures_reelles"
 _PDL_COL = "puissance_pdl_kw"
 
+# Colonnes NOT NULL de la table sans valeur naturelle : défaut 0.0 si absentes du key_mapping
+_COLUMN_DEFAULTS = {
+    "conso_kw": 0.0,
+    _PDL_COL: 0.0,
+}
+
 
 class ForecasterConnector(ConnectorInterface):
     def __init__(self, site_id: str, key_mapping: dict[str, str], bucket_seconds: int = 1):
@@ -126,13 +132,9 @@ class ForecasterConnector(ConnectorInterface):
             groups[ts_bucket][key] = row["value"]
 
         required_keys = set(self.key_mapping.keys())
-        has_pdl = _PDL_COL in self.key_mapping.values()
-
-        # Colonnes cibles dans l'ordre déterministe
         mapped_cols = list(self.key_mapping.values())
-        insert_cols = ["site_id", "timestamp"] + mapped_cols
-        if not has_pdl:
-            insert_cols.append(_PDL_COL)
+        extra_cols = [col for col in _COLUMN_DEFAULTS if col not in mapped_cols]
+        insert_cols = ["site_id", "timestamp"] + mapped_cols + extra_cols
 
         tuples = []
         for ts in sorted(groups):
@@ -145,8 +147,8 @@ class ForecasterConnector(ConnectorInterface):
             row_values: list = [self.site_id, dt]
             for src_key in self.key_mapping:
                 row_values.append(float(key_values[src_key]))
-            if not has_pdl:
-                row_values.append(0.0)
+            for col in extra_cols:
+                row_values.append(_COLUMN_DEFAULTS[col])
             tuples.append(tuple(row_values))
 
         if not tuples:
